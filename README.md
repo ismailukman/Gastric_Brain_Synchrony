@@ -16,7 +16,7 @@ This project quantifies phase synchronization between the gastric slow-wave rhyt
 
 - **Participants**: 43 healthy adults
 - **Final Analysis**: 84 runs after quality control
-- **Acquisition**: Simultaneous resting-state fMRI (TR=2s, ~6 min) and EGG recording
+- **Acquisition**: Simultaneous resting-state fMRI and EGG recording
 - **Motion Parameters**: 6 degrees of freedom
   - Translations: X (left-right), Y (anterior-posterior), Z (superior-inferior)
   - Rotations: X (pitch), Y (roll), Z (yaw)
@@ -26,7 +26,7 @@ This project quantifies phase synchronization between the gastric slow-wave rhyt
 ## Analysis Pipeline
 
 ### 1. Preprocessing
-- **fMRI**: Motion correction, normalization (MNI), smoothing (6mm FWHM) via AFNI/fMRIprep
+- **fMRI**: Motion correction, normalization (MNI), smoothing (6mm FWHM) via AFNI
 - **EGG**: Cardiac artifact removal, bandpass filtering (0.02-0.08 Hz), resampled to 10 Hz
 - **Motion**: Extracted from fMRI realignment, bandpass filtered at subject-specific gastric frequency ± 0.015 Hz
 
@@ -88,24 +88,17 @@ main_project_path/
 ├── code/
 │   ├── synchrony_analysis/
 │   │   ├── egg_confounds_synchrony_v5.py    # Main analysis script (PLV + awPLV)
-│   │   ├── egg_confounds_synchrony_v6.py    # Latest version (if exists)
 │   │   ├── signal_slicing.py                # Signal preprocessing utilities
 │   │   └── voxel_based_analysis.py          # Voxel-wise brain analysis
-│   ├── plot_subject_signals.py              # Comprehensive subject visualization (9 panels)
-│   ├── plot_gastric_transx.py               # Simple gastric + Translation X plot
-│   ├── regenerate_plot_v5.py                # Regenerate main density plots
-│   ├── create_method_figure_v2.py           # Enhanced method schematic
 │   ├── analysis_pipeline_flowchart.txt      # Detailed pipeline documentation
-│   ├── analysis_pipeline_simplified.txt     # Simplified pipeline overview
+│   ├──    # Simplified pipeline overview
 │   └── dataframes/
 │       ├── plvs_egg_w_motion_v5.csv         # Individual-level results (504 rows)
 │       ├── population_level_v5.csv          # Population-level results (12 rows)
 │       └── egg_brain_meta_data.csv          # Subject metadata
 ├── plots/
-│   ├── egg_confounds_synchrony_v5.png       # Main results figure (3×2 grid)
-│   ├── method_Figure1_v2.pdf/.png           # Enhanced methods schematic
+│   ├── plv_awplv_densities_v5.png       # Main results figure (3×2 grid)
 │   ├── gastric_rhythm_subject_*.png         # Individual subject gastric plots
-│   └── filtered_motion_subject_*.png        # Individual subject motion plots
 ├── derivatives/brain_gast/                  # Preprocessed EGG data
 ├── BIDS_data/sub_motion_files/              # Motion parameter files
 ├── config.py                                 # Configuration parameters
@@ -124,16 +117,6 @@ main_project_path/
   - Performs individual and population-level statistical testing
   - Generates density plot visualization
 
-### Visualization
-- **`plot_subject_signals.py`**: Individual subject detailed plots (gastric rhythm + 6 motion parameters)
-- **`plot_gastric_transx.py`**: Simple 2-panel plot (gastric + Translation X)
-- **`create_method_figure_v2.py`**: Professional methods schematic flowchart
-- **`regenerate_plot_v5.py`**: Regenerate main results figure with updated formatting
-
-### Documentation
-- **`analysis_pipeline_flowchart.txt`**: Detailed step-by-step pipeline (8 steps)
-- **`analysis_pipeline_simplified.txt`**: High-level overview (7 steps)
-- **`experiment_methods_results.txt`**: Publication-ready methods and results text
 
 ---
 
@@ -154,7 +137,7 @@ python synchrony_analysis/egg_confounds_synchrony_v5.py
 **Outputs:**
 - `dataframes/plvs_egg_w_motion_v5.csv` - Individual-level results
 - `dataframes/population_level_v5.csv` - Population-level statistics
-- `plots/egg_confounds_synchrony_v5.png` - Main results visualization
+- `plots/plv_awplv_densities_v5.png` - Main results visualization
 
 ### Subject-Specific Visualization
 ```bash
@@ -167,10 +150,6 @@ python plot_gastric_transx.py
 
 Edit `SUBJECT` and `RUN` variables in scripts to change subject.
 
-### Regenerate Main Figure
-```bash
-python regenerate_plot_v5.py
-```
 
 ---
 
@@ -198,37 +177,6 @@ Edit `config.py` to modify analysis parameters:
   - Empirical (filled) vs Null (dashed) distributions
   - Significance markers: * (q<0.05), ** (q<0.01), *** (q<0.001)
   - Font sizes optimized for publication (2× standard)
-
-- **Methods Schematic**: Professional flowchart showing complete analysis pipeline
-  - Modern color palette (light cyan, steel blue)
-  - Mathematical formulas included
-  - Publication-ready at 300 DPI
-
----
-
-## Biological Interpretation
-
-The observed gastric-motion phase-locking provides evidence that:
-
-1. **Gut-Brain-Motor Integration**: Gastric rhythm modulates postural control during rest
-2. **Directional Specificity**:
-   - Strong coupling in anterior-posterior, lateral, pitch, and roll
-   - No coupling in superior-inferior (potential biomechanical constraint)
-3. **Amplitude Dependence**: awPLV shows stronger effects, suggesting coupling is particularly prominent during high-amplitude gastric oscillations
-4. **Interoceptive Pathway**: Physiologically meaningful connection between visceral state and motor control
-
-### Implications for fMRI Preprocessing
-Conventional motion regression may inadvertently remove physiologically meaningful interoceptive signals. Researchers should consider gastric-band motion fluctuations as potential physiological confounds rather than noise.
-
----
-
-## Citation
-
-If you use this code or analysis approach, please cite:
-
-```
-[Your publication details here]
-```
 
 ---
 
@@ -272,15 +220,6 @@ If you use this code or analysis approach, please cite:
 - Circular permutation null distribution
 - Single-metric PLV analysis
 - Basic visualization
-
----
-
-## Acknowledgments
-
-- Data preprocessing: fMRIprep, AFNI
-- Signal processing: MNE-Python
-- Statistical methods: SciPy (Benjamini-Hochberg FDR)
-- Visualization: Matplotlib, Seaborn
 
 ---
 
