@@ -22,6 +22,7 @@ This module provides a complete pipeline for preprocessing EGG (electrogastrogra
 Electrogastrography (EGG) records the electrical activity of the stomach using surface electrodes placed on the abdomen. The gastric slow wave typically oscillates at **0.033-0.066 Hz** (2-4 cycles per minute), known as the normogastric frequency range.
 
 This preprocessing pipeline:
+
 1. Reads raw EGG data from AcqKnowledge/Biopac format (.acq files)
 2. Aligns the EGG signal with fMRI acquisition using trigger signals
 3. Identifies the dominant gastric frequency for each subject
@@ -79,6 +80,7 @@ egg_data/
 ### Expected .acq File Contents
 
 Each `.acq` file should contain:
+
 - **Channels 0-3**: EGG electrode signals (typically 4 channels)
 - **Channel 8**: MRI trigger signal (configurable in `config.py`)
 
@@ -88,15 +90,15 @@ Each `.acq` file should contain:
 
 Create a metadata CSV file (`egg_metadata.csv`) with the following columns:
 
-| Column | Description | Example Values |
-|--------|-------------|----------------|
-| `subject` | Subject identifier | `sub-01`, `sub-02` |
-| `run` | Run number | `1`, `2` |
-| `mri_length` | fMRI scan duration in seconds | `600` |
-| `num_channles` | Number of EGG channels | `4` |
-| `trigger_start` | Trigger detection mode | `auto` or seconds (e.g., `10.5`) |
-| `dominant_channel` | Which channel to use | `auto` or channel index (0-3) |
-| `dominant_frequency` | Gastric frequency | `auto` or Hz (e.g., `0.05`) |
+| Column                 | Description                   | Example Values                       |
+| ---------------------- | ----------------------------- | ------------------------------------ |
+| `subject`            | Subject identifier            | `sub-01`, `sub-02`               |
+| `run`                | Run number                    | `1`, `2`                         |
+| `mri_length`         | fMRI scan duration in seconds | `600`                              |
+| `num_channles`       | Number of EGG channels        | `4`                                |
+| `trigger_start`      | Trigger detection mode        | `auto` or seconds (e.g., `10.5`) |
+| `dominant_channel`   | Which channel to use          | `auto` or channel index (0-3)      |
+| `dominant_frequency` | Gastric frequency             | `auto` or Hz (e.g., `0.05`)      |
 
 ### Example Metadata File
 
@@ -235,7 +237,7 @@ Step 6: BANDPASS FILTERING
         ├── Passband: [dominant_freq ± 0.015 Hz]
         └── Zero-phase filtering (no phase distortion)
 
-Step 7: NORMALIZATION (optional)
+Step 7: NORMALIZATION
         └── Z-score standardization
 
 Step 8: OUTPUT
@@ -280,6 +282,7 @@ preprocess_egg_data/
 ### Output Data Format
 
 **Filtered Signal** (`gast_data_*.npy`):
+
 - 1D NumPy array
 - Sampling rate: 10 Hz (configurable)
 - Duration matches fMRI scan
@@ -295,6 +298,7 @@ print(f"Signal range: [{egg_signal.min():.2f}, {egg_signal.max():.2f}]")
 ```
 
 **Dominant Frequency** (`max_freq*.npy`):
+
 - Single float value in Hz
 - Typically in range 0.033-0.066 Hz
 
