@@ -1,0 +1,5 @@
+subject,run,mri_length,num_channles,trigger_start,dominant_channel,dominant_frequency
+sub-01,1,600,4,auto,auto,auto
+sub-01,2,600,4,auto,auto,auto
+sub-02,1,600,4,auto,auto,auto
+sub-02,2,600,4,auto,1,0.05

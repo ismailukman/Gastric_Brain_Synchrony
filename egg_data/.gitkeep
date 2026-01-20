@@ -1,0 +1,10 @@
+# This file keeps the egg_data folder in git
+# Place your raw EGG data here following the structure:
+# egg_data/
+#   sub-01/
+#     egg/
+#       sub-01_rest1.acq
+#       sub-01_rest2.acq
+#   sub-02/
+#     egg/
+#       sub-02_rest1.acq
