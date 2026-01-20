@@ -1,190 +1,315 @@
-# Gastric-Brain-Motion Synchrony Analysis
+# EGG (Electrogastrography) Preprocessing Pipeline
 
-```Investigating the coupling between gastric electrical rhythm and head motion during resting-state fMRI.
-Based on analysis provided by Levakov https://github.com/GidLev/brain_gastric_synchronization_2023/tree/master.
-```
+This module provides a complete pipeline for preprocessing EGG (electrogastrography) data recorded during fMRI sessions. The pipeline extracts and filters gastric slow-wave signals for subsequent synchrony analysis with brain/motion data.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Data Organization](#data-organization)
+- [Metadata File Format](#metadata-file-format)
+- [Usage](#usage)
+  - [Single Subject Processing](#single-subject-processing)
+  - [Batch Processing](#batch-processing)
+- [Processing Pipeline](#processing-pipeline)
+- [Output Files](#output-files)
 
 ---
 
 ## Overview
 
-This project quantifies phase synchronization between the gastric slow-wave rhythm (measured via electrogastrography, EGG) and head motion parameters during resting-state fMRI. Using dual metrics—Phase Locking Value (PLV) and Amplitude-Weighted PLV (awPLV)—we demonstrate that gastric rhythm significantly modulates head motion in multiple dimensions, providing evidence for gut-brain-motor integration.
+Electrogastrography (EGG) records the electrical activity of the stomach using surface electrodes placed on the abdomen. The gastric slow wave typically oscillates at **0.033-0.066 Hz** (2-4 cycles per minute), known as the normogastric frequency range.
 
-**Key Finding**: Gastric rhythm significantly couples with head motion in anterior-posterior, lateral, pitch, and roll dimensions, but NOT superior-inferior motion.
-
----
-
-## Dataset
-
-- **Participants**: 43 healthy adults
-- **Final Analysis**: 84 runs after quality control
-- **Acquisition**: Simultaneous resting-state fMRI and EGG recording
-- **Motion Parameters**: 6 degrees of freedom
-  - Translations: X (left-right), Y (anterior-posterior), Z (superior-inferior)
-  - Rotations: X (pitch), Y (roll), Z (yaw)
-
+This preprocessing pipeline:
+1. Reads raw EGG data from AcqKnowledge/Biopac format (.acq files)
+2. Aligns the EGG signal with fMRI acquisition using trigger signals
+3. Identifies the dominant gastric frequency for each subject
+4. Applies narrow bandpass filtering around the dominant frequency
+5. Outputs cleaned, filtered gastric signals ready for synchrony analysis
 
 ---
 
-## Analysis Pipeline
+## Requirements
 
-### 1. Preprocessing
-- **fMRI**: Motion correction, normalization (MNI), smoothing (6mm FWHM) via AFNI
-- **EGG**: Cardiac artifact removal, bandpass filtering (0.02-0.08 Hz), resampled to 10 Hz
-- **Motion**: Extracted from fMRI realignment, bandpass filtered at subject-specific gastric frequency ± 0.015 Hz
-
-### 2. Synchrony Metrics
-**Phase Locking Value (PLV):**
-```
-PLV = |1/T Σ exp(iΔφ(t))|
-```
-Measures pure phase synchronization (range: 0-1)
-
-**Amplitude-Weighted PLV (awPLV):**
-```
-awPLV = |1/T Σ w(t)·exp(iΔφ(t))|
-where w(t) = A_gastric(t)·A_motion(t) / Σ(A_gastric·A_motion)
-```
-Emphasizes high-amplitude coupling periods (range: 0-1)
-
-### 3. Statistical Testing
-- **Null Distribution**: Mismatch approach (N-1 pairings with gastric signals from other subjects)
-- **Individual Level**: 504 tests (84 runs × 6 motion params) per metric
-  - FDR correction (Benjamini-Hochberg, q<0.05)
-  - Bonferroni correction
-- **Population Level**: Mann-Whitney U test (empirical vs pooled null)
-  - Separate FDR corrections for PLV and awPLV (6 tests each)
-
----
-
-## Repository Structure
+### Python Dependencies
 
 ```
-main_project_path/
-├── code/
-│   ├── synchrony_analysis/
-│   │   ├── egg_confounds_synchrony_v5.py    # Main analysis script (PLV + awPLV)
-│   │   ├── signal_slicing.py                # Signal preprocessing utilities
-│   │   └── voxel_based_analysis.py          # Voxel-wise brain analysis
-│   └── dataframes/
-│       ├── plvs_egg_w_motion_v5.csv         # Individual-level results (504 rows)
-│       ├── population_level_v5.csv          # Population-level results (12 rows)
-│       └── egg_brain_meta_data.csv          # Subject metadata
-├── plots/
-│   ├── plv_awplv_densities_v5.png           # Population level results figure (3×2 grid)
-├── derivatives/brain_gast/                  # Preprocessed EGG data
-├── BIDS_data/sub_motion_files/              # Motion parameter files
-├── config.py                                # Configuration parameters
-└── README.md                                # This file
+numpy>=1.20.0
+scipy>=1.7.0
+pandas>=1.3.0
+matplotlib>=3.4.0
+mne>=0.24.0
+bioread>=3.0.0
+scikit-learn>=0.24.0
 ```
 
----
+### Installation
 
-## Key Scripts
-
-### Main Analysis
-- **`egg_confounds_synchrony_v5.py`**: Complete PLV/awPLV analysis pipeline
-  - Loads EGG and motion data
-  - Computes synchrony metrics with mismatch null distribution
-  - Performs individual and population-level statistical testing
-  - Generates density plot visualization
-
-
----
-
-## Running the Analysis
-
-### Prerequisites
 ```bash
-# Python 3.11+
-pip install numpy scipy pandas matplotlib seaborn mne-python
+# Create a virtual environment (recommended)
+python -m venv egg_env
+source egg_env/bin/activate  # On Windows: egg_env\Scripts\activate
+
+# Install dependencies
+pip install numpy scipy pandas matplotlib mne bioread scikit-learn
 ```
-
-### Main Analysis
-```bash
-cd code
-python synchrony_analysis/egg_confounds_synchrony_v5.py
-```
-
-**Outputs:**
-- `dataframes/plvs_egg_w_motion_v5.csv` - Individual-level results
-- `dataframes/population_level_v5.csv` - Population-level statistics
-- `plots/plv_awplv_densities_v5.png` - Main results visualization
-
-### Subject-Specific Visualization
-```bash
-# Detailed 9-panel figure
-python plot_subject_signals.py
-
-# Simple 2-panel figure (gastric + Translation X)
-python plot_gastric_transx.py
-```
-
-Edit `SUBJECT` and `RUN` variables in scripts to change subject.
-
 
 ---
 
-## Configuration
+## Data Organization
 
-Edit `config.py` to modify analysis parameters:
-- `sample_rate_fmri`: fMRI sampling rate (default: 0.5 Hz)
-- `intermediate_sample_rate`: EGG resampling rate (default: 10 Hz)
-- `bandpass_lim`: Frequency bandwidth for filtering (default: 0.015 Hz)
-- `clean_level`: EGG cleaning method (default: 'strict_gs_cardiac')
+### Input Data Structure
+
+Place your raw EGG data in the `egg_data/` folder following this structure:
+
+```
+egg_data/
+├── sub-01/
+│   └── egg/
+│       ├── sub-01_rest1.acq
+│       └── sub-01_rest2.acq
+├── sub-02/
+│   └── egg/
+│       ├── sub-02_rest1.acq
+│       └── sub-02_rest2.acq
+└── ...
+```
+
+### Expected .acq File Contents
+
+Each `.acq` file should contain:
+- **Channels 0-3**: EGG electrode signals (typically 4 channels)
+- **Channel 8**: MRI trigger signal (configurable in `config.py`)
+
+---
+
+## Metadata File Format
+
+Create a metadata CSV file (`egg_metadata.csv`) with the following columns:
+
+| Column | Description | Example Values |
+|--------|-------------|----------------|
+| `subject` | Subject identifier | `sub-01`, `sub-02` |
+| `run` | Run number | `1`, `2` |
+| `mri_length` | fMRI scan duration in seconds | `600` |
+| `num_channles` | Number of EGG channels | `4` |
+| `trigger_start` | Trigger detection mode | `auto` or seconds (e.g., `10.5`) |
+| `dominant_channel` | Which channel to use | `auto` or channel index (0-3) |
+| `dominant_frequency` | Gastric frequency | `auto` or Hz (e.g., `0.05`) |
+
+### Example Metadata File
+
+```csv
+subject,run,mri_length,num_channles,trigger_start,dominant_channel,dominant_frequency
+sub-01,1,600,4,auto,auto,auto
+sub-01,2,600,4,auto,auto,auto
+sub-02,1,600,4,auto,auto,auto
+sub-02,2,600,4,auto,1,0.05
+```
+
+A template file (`egg_metadata_template.csv`) is provided.
+
+---
+
+## Usage
+
+### Single Subject Processing
+
+Process one subject/run at a time:
+
+```bash
+# Basic usage
+python preprocess_gastric_data.py sub-01 1
+
+# This will:
+# 1. Load sub-01's run 1 EGG data from egg_data/sub-01/egg/sub-01_rest1.acq
+# 2. Process the signal
+# 3. Save outputs to output/derivatives/sub-01/sub-011/
+# 4. Save plots to output/plots/sub-01/sub-011/
+```
+
+**Example Output:**
+
+```
+============================================================
+Processing subject: sub-01, run: 1
+============================================================
+Reading EGG file: /path/to/egg_data/sub-01/egg/sub-01_rest1.acq
+Original sample rate: 1000.0 Hz
+MRI duration: 600 seconds
+Number of EGG channels: 4
+Channel #1: frequency=0.048, height=2.5e-06, prominences=1.2e-06, curvature=-3.4e-04
+Channel #2: frequency=0.051, height=1.8e-06, prominences=8.5e-07, curvature=-2.1e-04
+Dominant frequency: 0.0480 Hz
+Dominant channel: 1
+
+Output files saved:
+  - Data: output/derivatives/sub-01/sub-011/gast_data_sub-01_run1strict.npy
+  - Frequency: output/derivatives/sub-01/sub-011/max_freqsub-01_run1strict.npy
+  - Plots: output/plots/sub-01/sub-011/
+```
+
+### Batch Processing
+
+Process all subjects defined in the metadata file:
+
+```bash
+# Process all subjects (uses default metadata file from config)
+python preprocess_gastric_data.py --batch
+
+# Use a specific metadata file
+python preprocess_gastric_data.py --batch --metadata /path/to/my_metadata.csv
+
+# Specify number of parallel jobs
+python preprocess_gastric_data.py --batch --jobs 4
+
+# Sequential processing (1 job)
+python preprocess_gastric_data.py --batch --jobs 1
+```
+
+**Example Batch Output:**
+
+```
+============================================================
+BATCH PROCESSING MODE
+============================================================
+Metadata file: /path/to/egg_metadata.csv
+Parallel jobs: 8
+Total subjects/runs to process: 84
+============================================================
+
+[SUCCESS] sub-01 run 1
+[SUCCESS] sub-01 run 2
+[SUCCESS] sub-02 run 1
+[FAILED] sub-03 run 1
+...
+
+============================================================
+BATCH PROCESSING COMPLETE
+============================================================
+Successful: 82/84
+Failed: 2/84
+
+Failed subjects:
+  - sub-03 run 1: File not found: .../sub-03_rest1.acq
+  - sub-15 run 2: No peaks found in normogastric range
+```
+
+---
+
+## Processing Pipeline
+
+The preprocessing pipeline consists of the following steps:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    EGG PREPROCESSING PIPELINE                    │
+└─────────────────────────────────────────────────────────────────┘
+
+Step 1: DATA LOADING
+        ├── Read .acq file (Biopac/AcqKnowledge format)
+        ├── Extract EGG channels (typically 4)
+        └── Extract trigger channel
+
+Step 2: TRIGGER DETECTION
+        ├── Detect MRI trigger onset (auto or manual)
+        └── Define recording segment aligned with fMRI
+
+Step 3: SIGNAL SLICING
+        ├── Extract EGG segment matching fMRI duration
+        └── Generate sliced signal plot
+
+Step 4: RESAMPLING
+        ├── Downsample from original rate (e.g., 1000 Hz)
+        └── to intermediate rate (10 Hz)
+
+Step 5: SPECTRAL ANALYSIS (Welch PSD)
+        ├── Compute power spectral density per channel
+        ├── Identify peaks in normogastric range (0.033-0.066 Hz)
+        ├── Select dominant channel (highest power peak)
+        └── Determine dominant gastric frequency
+
+Step 6: BANDPASS FILTERING
+        ├── Apply FIR filter (Hamming window)
+        ├── Passband: [dominant_freq ± 0.015 Hz]
+        └── Zero-phase filtering (no phase distortion)
+
+Step 7: NORMALIZATION (optional)
+        └── Z-score standardization
+
+Step 8: OUTPUT
+        ├── Save filtered signal (.npy)
+        ├── Save dominant frequency (.npy)
+        └── Save diagnostic plots (.png)
+```
 
 ---
 
 ## Output Files
 
-### Data Files
-- **`plvs_egg_w_motion_v5.csv`** (504 rows): Individual-level results
-  - Columns: subject, run, motion_param, plv_empirical, awplv_empirical, p-values, FDR-corrected p-values, significance flags
+### Directory Structure
 
-- **`population_level_v5.csv`** (12 rows): Population-level statistics
-  - Columns: motion_param, metric, n_empirical, n_null, mean_empirical, mean_null, effect_size, p_fdr, sig_fdr
+After processing, the output folder will contain:
 
-### Figures
-- **Main Results**: 3×2 grid showing PLV and awPLV density distributions for all 6 motion parameters
-  - Empirical (filled) vs Null (dashed) distributions
-  - Significance markers: * (q<0.05), ** (q<0.01), *** (q<0.001)
-  - Font sizes optimized for publication (2× standard)
+```
+preprocess_egg_data/
+└── output/
+    ├── derivatives/
+    │   ├── sub-01/
+    │   │   ├── sub-011/
+    │   │   │   ├── gast_data_sub-01_run1strict.npy    # Filtered EGG signal
+    │   │   │   └── max_freqsub-01_run1strict.npy     # Dominant frequency
+    │   │   └── sub-012/
+    │   │       ├── gast_data_sub-01_run2strict.npy
+    │   │       └── max_freqsub-01_run2strict.npy
+    │   └── sub-02/
+    │       └── ...
+    └── plots/
+        ├── sub-01/
+        │   ├── sub-011/
+        │   │   ├── trigger_cut_sub-01_1.png          # Trigger detection
+        │   │   ├── sliced_signalsub-01_1.png         # Raw sliced signal
+        │   │   ├── post_first_resample_sub-01_1.png  # After resampling
+        │   │   ├── egg_power_spectral_density_sub-01_1.png  # PSD plot
+        │   │   └── egg_filteredsub-01_1.png          # Final filtered signal
+        │   └── ...
+        └── ...
+```
+
+### Output Data Format
+
+**Filtered Signal** (`gast_data_*.npy`):
+- 1D NumPy array
+- Sampling rate: 10 Hz (configurable)
+- Duration matches fMRI scan
+- Z-score normalized (if enabled)
+
+```python
+import numpy as np
+
+# Load preprocessed EGG signal
+egg_signal = np.load('output/derivatives/sub-01/sub-011/gast_data_sub-01_run1strict.npy')
+print(f"Signal shape: {egg_signal.shape}")  # e.g., (6000,) for 600s at 10Hz
+print(f"Signal range: [{egg_signal.min():.2f}, {egg_signal.max():.2f}]")
+```
+
+**Dominant Frequency** (`max_freq*.npy`):
+- Single float value in Hz
+- Typically in range 0.033-0.066 Hz
+
+```python
+# Load dominant gastric frequency
+freq = np.load('output/derivatives/sub-01/sub-011/max_freqsub-01_run1strict.npy')
+print(f"Dominant frequency: {freq:.4f} Hz ({freq*60:.2f} cycles/min)")
+```
 
 ---
 
-## Software Dependencies
+## License
 
-- **Python**: 3.11+
-- **NumPy**: Array operations and numerical computing
-- **SciPy**: Statistical testing (Mann-Whitney U, FDR correction)
-- **Pandas**: Data manipulation and CSV handling
-- **Matplotlib**: Visualization and figure generation
-- **Seaborn**: Kernel density estimation and enhanced plotting
-- **MNE-Python**: Signal filtering (FIR, Hamming window)
+MIT License
 
----
+## Author
 
-## Contact
-ismailukman
-
----
-
-## Changelog
-
-### Version 5 (Current)
-- Added amplitude-weighted PLV (awPLV) analysis
-- Implemented mismatch null distribution approach
-- Enhanced visualization with significance markers
-- Doubled font sizes for publication quality
-- Created comprehensive documentation and pipeline flowcharts
-- Added subject-specific visualization scripts
-- Enhanced methods schematic figure (v2)
-
-### Version 4
-- Circular permutation null distribution
-- Single-metric PLV analysis
-- Basic visualization
-
----
-
-**Last Updated**: December 2024
+Ismail Ukman
