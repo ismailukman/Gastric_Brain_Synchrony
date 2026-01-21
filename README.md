@@ -313,7 +313,3 @@ print(f"Dominant frequency: {freq:.4f} Hz ({freq*60:.2f} cycles/min)")
 ## License
 
 MIT License
-
-## Author
-
-Ismail Ukman
