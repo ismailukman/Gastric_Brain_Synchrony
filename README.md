@@ -66,14 +66,12 @@ Place your raw EGG data in the `egg_data/` folder following this structure:
 
 ```
 egg_data/
-├── sub-01/
-│   └── egg/
-│       ├── sub-01_rest1.acq
-│       └── sub-01_rest2.acq
-├── sub-02/
-│   └── egg/
-│       ├── sub-02_rest1.acq
-│       └── sub-02_rest2.acq
+├── VITD0107_Acq/
+│   └── VITD0107_EGG.acq
+├── VITD0126_Acq/
+│   └── VITD0126_EGG.acq
+├── VITD0128_Acq/
+│   └── VITD0128_EGG.acq
 └── ...
 ```
 
@@ -81,8 +79,9 @@ egg_data/
 
 Each `.acq` file should contain:
 
-- **Channels 0-3**: EGG electrode signals (typically 4 channels)
-- **Channel 8**: MRI trigger signal (configurable in `config.py`)
+- **Channels 0-3**: EGG electrode signals (4 channels)
+- **Channel 4**: EDA signal (optional)
+- **Channels 5-6**: Digital trigger signals (MRI trigger on channel 6, configurable in `config.py`)
 
 ---
 
@@ -104,13 +103,12 @@ Create a metadata CSV file (`egg_metadata.csv`) with the following columns:
 
 ```csv
 subject,run,mri_length,num_channles,trigger_start,dominant_channel,dominant_frequency
-sub-01,1,600,4,auto,auto,auto
-sub-01,2,600,4,auto,auto,auto
-sub-02,1,600,4,auto,auto,auto
-sub-02,2,600,4,auto,1,0.05
+VITD0107,1,600,4,0,auto,auto
+VITD0126,1,547,4,0,auto,auto
+VITD0128,1,600,4,45,auto,auto
 ```
 
-A template file (`egg_metadata_template.csv`) is provided.
+The metadata file `egg_metadata.csv` is located in the `preprocess_egg_data/` folder.
 
 ---
 
@@ -121,35 +119,35 @@ A template file (`egg_metadata_template.csv`) is provided.
 Process one subject/run at a time:
 
 ```bash
+cd preprocess_egg_data
+
 # Basic usage
-python preprocess_gastric_data.py sub-01 1
+python preprocess_gastric_data.py VITD0107 1
 
 # This will:
-# 1. Load sub-01's run 1 EGG data from egg_data/sub-01/egg/sub-01_rest1.acq
+# 1. Load EGG data from egg_data/VITD0107_Acq/VITD0107_EGG.acq
 # 2. Process the signal
-# 3. Save outputs to output/derivatives/sub-01/sub-011/
-# 4. Save plots to output/plots/sub-01/sub-011/
+# 3. Save outputs to output/derivatives/VITD0107/VITD01071/
+# 4. Save plots to output/plots/VITD0107/VITD01071/
 ```
 
 **Example Output:**
 
 ```
 ============================================================
-Processing subject: sub-01, run: 1
+Processing subject: VITD0107, run: 1
 ============================================================
-Reading EGG file: /path/to/egg_data/sub-01/egg/sub-01_rest1.acq
-Original sample rate: 1000.0 Hz
+Reading EGG file: egg_data/VITD0107_Acq/VITD0107_EGG.acq
+Original sample rate: 2000.0 Hz
 MRI duration: 600 seconds
 Number of EGG channels: 4
-Channel #1: frequency=0.048, height=2.5e-06, prominences=1.2e-06, curvature=-3.4e-04
-Channel #2: frequency=0.051, height=1.8e-06, prominences=8.5e-07, curvature=-2.1e-04
 Dominant frequency: 0.0480 Hz
 Dominant channel: 1
 
 Output files saved:
-  - Data: output/derivatives/sub-01/sub-011/gast_data_sub-01_run1strict.npy
-  - Frequency: output/derivatives/sub-01/sub-011/max_freqsub-01_run1strict.npy
-  - Plots: output/plots/sub-01/sub-011/
+  - Data: output/derivatives/VITD0107/VITD01071/gast_data_VITD0107_run1strict.npy
+  - Frequency: output/derivatives/VITD0107/VITD01071/max_freqVITD0107_run1strict.npy
+  - Plots: output/plots/VITD0107/VITD01071/
 ```
 
 ### Batch Processing
@@ -157,11 +155,10 @@ Output files saved:
 Process all subjects defined in the metadata file:
 
 ```bash
+cd preprocess_egg_data
+
 # Process all subjects (uses default metadata file from config)
 python preprocess_gastric_data.py --batch
-
-# Use a specific metadata file
-python preprocess_gastric_data.py --batch --metadata /path/to/my_metadata.csv
 
 # Specify number of parallel jobs
 python preprocess_gastric_data.py --batch --jobs 4
@@ -176,26 +173,20 @@ python preprocess_gastric_data.py --batch --jobs 1
 ============================================================
 BATCH PROCESSING MODE
 ============================================================
-Metadata file: /path/to/egg_metadata.csv
+Metadata file: preprocess_egg_data/egg_metadata.csv
 Parallel jobs: 8
-Total subjects/runs to process: 84
+Total subjects/runs to process: 3
 ============================================================
 
-[SUCCESS] sub-01 run 1
-[SUCCESS] sub-01 run 2
-[SUCCESS] sub-02 run 1
-[FAILED] sub-03 run 1
-...
+[SUCCESS] VITD0107 run 1
+[SUCCESS] VITD0126 run 1
+[SUCCESS] VITD0128 run 1
 
 ============================================================
 BATCH PROCESSING COMPLETE
 ============================================================
-Successful: 82/84
-Failed: 2/84
-
-Failed subjects:
-  - sub-03 run 1: File not found: .../sub-03_rest1.acq
-  - sub-15 run 2: No peaks found in normogastric range
+Successful: 3/3
+Failed: 0/3
 ```
 
 ---
@@ -258,24 +249,23 @@ After processing, the output folder will contain:
 preprocess_egg_data/
 └── output/
     ├── derivatives/
-    │   ├── sub-01/
-    │   │   ├── sub-011/
-    │   │   │   ├── gast_data_sub-01_run1strict.npy    # Filtered EGG signal
-    │   │   │   └── max_freqsub-01_run1strict.npy     # Dominant frequency
-    │   │   └── sub-012/
-    │   │       ├── gast_data_sub-01_run2strict.npy
-    │   │       └── max_freqsub-01_run2strict.npy
-    │   └── sub-02/
+    │   ├── VITD0107/
+    │   │   └── VITD01071/
+    │   │       ├── gast_data_VITD0107_run1strict.npy    # Filtered EGG signal
+    │   │       └── max_freqVITD0107_run1strict.npy      # Dominant frequency
+    │   ├── VITD0126/
+    │   │   └── VITD01261/
+    │   │       └── ...
+    │   └── VITD0128/
     │       └── ...
     └── plots/
-        ├── sub-01/
-        │   ├── sub-011/
-        │   │   ├── trigger_cut_sub-01_1.png          # Trigger detection
-        │   │   ├── sliced_signalsub-01_1.png         # Raw sliced signal
-        │   │   ├── post_first_resample_sub-01_1.png  # After resampling
-        │   │   ├── egg_power_spectral_density_sub-01_1.png  # PSD plot
-        │   │   └── egg_filteredsub-01_1.png          # Final filtered signal
-        │   └── ...
+        ├── VITD0107/
+        │   └── VITD01071/
+        │       ├── trigger_cut_VITD0107_1.png              # Trigger detection
+        │       ├── sliced_signalVITD0107_1.png             # Raw sliced signal
+        │       ├── post_first_resample_VITD0107_1.png      # After resampling
+        │       ├── egg_power_spectral_density_VITD0107_1.png  # PSD plot
+        │       └── egg_filteredVITD0107_1.png              # Final filtered signal
         └── ...
 ```
 
@@ -292,7 +282,7 @@ preprocess_egg_data/
 import numpy as np
 
 # Load preprocessed EGG signal
-egg_signal = np.load('output/derivatives/sub-01/sub-011/gast_data_sub-01_run1strict.npy')
+egg_signal = np.load('output/derivatives/VITD0107/VITD01071/gast_data_VITD0107_run1strict.npy')
 print(f"Signal shape: {egg_signal.shape}")  # e.g., (6000,) for 600s at 10Hz
 print(f"Signal range: [{egg_signal.min():.2f}, {egg_signal.max():.2f}]")
 ```
@@ -304,6 +294,6 @@ print(f"Signal range: [{egg_signal.min():.2f}, {egg_signal.max():.2f}]")
 
 ```python
 # Load dominant gastric frequency
-freq = np.load('output/derivatives/sub-01/sub-011/max_freqsub-01_run1strict.npy')
+freq = np.load('output/derivatives/VITD0107/VITD01071/max_freqVITD0107_run1strict.npy')
 print(f"Dominant frequency: {freq:.4f} Hz ({freq*60:.2f} cycles/min)")
 ```
