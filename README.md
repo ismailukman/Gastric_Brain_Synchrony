@@ -307,4 +307,3 @@ print(f"Signal range: [{egg_signal.min():.2f}, {egg_signal.max():.2f}]")
 freq = np.load('output/derivatives/sub-01/sub-011/max_freqsub-01_run1strict.npy')
 print(f"Dominant frequency: {freq:.4f} Hz ({freq*60:.2f} cycles/min)")
 ```
-

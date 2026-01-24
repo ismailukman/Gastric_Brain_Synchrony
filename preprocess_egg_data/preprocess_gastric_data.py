@@ -25,7 +25,6 @@ Usage:
     Batch with specific metadata file:
         python preprocess_gastric_data.py --batch --metadata path/to/metadata.csv
 
-Author: Ismail Ukman
 """
 
 import bioread
@@ -128,12 +127,32 @@ def preprocess_single_subject(subject_name, run, metadata_df=None, verbose=True)
         print(f'Reading EGG file: {egg_file_path}')
 
     if not os.path.exists(egg_file_path):
-        result['error'] = f'File not found: {egg_file_path}'
-        print(f"Error: {result['error']}")
-        return result
+        # Try alternative path: {egg_data_path}/{subject}/{subject}_Acq/{subject}_EGG.acq
+        alt_egg_file_path = os.path.join(
+            egg_data_path, subject_name, f'{subject_name}_Acq', f'{subject_name}_EGG.acq'
+        )
+        if os.path.exists(alt_egg_file_path):
+             print(f'File not found at default path. Found at: {alt_egg_file_path}')
+             egg_file_path = alt_egg_file_path
+        else:
+            # Try another alternative path: {egg_data_path}/{subject}_Acq/{subject}_EGG.acq
+            alt_egg_file_path_2 = os.path.join(
+                egg_data_path, f'{subject_name}_Acq', f'{subject_name}_EGG.acq'
+            )
+            if os.path.exists(alt_egg_file_path_2):
+                 print(f'File not found at default path. Found at: {alt_egg_file_path_2}')
+                 egg_file_path = alt_egg_file_path_2
+            else:
+                result['error'] = f'File not found: {egg_file_path}'
+                print(f"Error: {result['error']}")
+                return result
 
     try:
         data = bioread.read_file(egg_file_path)
+        if verbose:
+            print(f"DEBUG: Actual number of channels in file: {len(data.channels)}")
+            for i, ch in enumerate(data.channels):
+                print(f"DEBUG: Channel {i}: {ch.name} (samples: {len(ch.data)})")
     except Exception as e:
         result['error'] = f'Failed to read EGG file: {str(e)}'
         print(f"Error: {result['error']}")

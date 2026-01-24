@@ -38,7 +38,7 @@ intermediate_sample_rate = 10
 
 # Channel number containing the MRI trigger signal
 # This is used to align EGG data with fMRI acquisition
-trigger_channel = 8
+trigger_channel = 6
 
 # =============================================================================
 # FILTERING PARAMETERS

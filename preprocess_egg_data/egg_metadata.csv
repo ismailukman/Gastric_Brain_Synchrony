@@ -1,0 +1,4 @@
+subject,run,mri_length,num_channles,trigger_start,dominant_channel,dominant_frequency
+VITD0107,1,600,4,0,auto,auto
+VITD0126,1,547,4,0,auto,auto
+VITD0128,1,600,4,45,auto,auto
