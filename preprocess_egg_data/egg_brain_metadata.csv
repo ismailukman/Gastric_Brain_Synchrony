@@ -1,0 +1,15 @@
+subject,run,mri_length,num_channles,trigger_start,dominant_channel,dominant_frequency
+VITD0107,1,912,4,261,auto,auto
+VITD0108,1,912,4,38,auto,auto
+VITD0109,1,912,4,154.25,auto,auto
+VITD0111,1,912,4,244.25,auto,auto
+VITD0112,1,912,4,55,auto,auto
+VITD0116,1,912,4,56.5,auto,auto
+VITD0117,1,912,4,330,auto,auto
+VITD0118,1,912,4,74.5,auto,auto
+VITD0119,1,912,4,130,auto,auto
+VITD0120,1,912,4,94,auto,auto
+VITD0124,1,912,4,47,auto,auto
+VITD0125,1,693,4,110.5,auto,auto
+VITD0126,1,912,4,547.5,auto,auto
+VITD0128,1,912,4,65,auto,auto

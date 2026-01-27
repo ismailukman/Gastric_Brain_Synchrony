@@ -187,12 +187,37 @@ def preprocess_single_subject(subject_name, run, metadata_df=None, verbose=True)
         trigger_start = int(max(float(record_meta['trigger_start']), 0) * original_sample_rate)
         action_idx = [trigger_start, trigger_start + int(duration)]
 
+    # STEP 5b: Bounds checking - ensure slice doesn't exceed recording length
+    total_samples = len(data.channels[0].data)
+    if action_idx[1] > total_samples:
+        recording_duration = total_samples / original_sample_rate
+        trigger_start_sec = action_idx[0] / original_sample_rate
+        requested_end = trigger_start_sec + record_meta['mri_length']
+        available_duration = (total_samples - action_idx[0]) / original_sample_rate
+
+        print(f'\n{"!"*60}')
+        print(f'WARNING: Slice exceeds recording length for {subject_name}!')
+        print(f'{"!"*60}')
+        print(f'  Recording duration: {recording_duration:.1f} seconds')
+        print(f'  trigger_start: {trigger_start_sec:.1f} seconds')
+        print(f'  mri_length: {record_meta["mri_length"]} seconds')
+        print(f'  {trigger_start_sec:.1f} + {record_meta["mri_length"]} = {requested_end:.1f}s exceeds the {recording_duration:.1f}s recording')
+        print(f'  Truncating to {available_duration:.1f} seconds')
+        print(f'{"!"*60}\n')
+
+        warnings.warn(
+            f'Requested slice exceeds recording length. Truncating to {available_duration:.1f}s.'
+        )
+        action_idx[1] = total_samples
+        duration = total_samples - action_idx[0]
+
     # STEP 6: Plot trigger signal
     plot_trigger(trigger, action_idx, original_sample_rate,
                  subject=subject_name, run=run, save_path=plot_path)
 
     # STEP 7: Slice recording according to MRI trigger timing
-    signal_time = data.channels[0].time_index[:int(duration)]
+    actual_slice_length = action_idx[1] - action_idx[0]
+    signal_time = data.channels[0].time_index[:actual_slice_length]
     signal_egg = [data.channels[i].data[action_idx[0]:action_idx[1]] for i in range(num_gast)]
 
     # STEP 8: Plot sliced EGG signal

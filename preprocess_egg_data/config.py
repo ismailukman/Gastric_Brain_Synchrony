@@ -21,7 +21,7 @@ plots_path = os.path.join(output_path, 'plots')
 derivatives_path = os.path.join(output_path, 'derivatives')
 
 # Path to metadata CSV file
-metadata_file = os.path.join(os.path.dirname(__file__), 'egg_metadata.csv')
+metadata_file = os.path.join(os.path.dirname(__file__), 'egg_brain_metadata.csv')
 
 # =============================================================================
 # SAMPLING RATE CONFIGURATION
