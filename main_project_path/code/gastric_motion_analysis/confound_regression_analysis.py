@@ -10,9 +10,6 @@ Analyses included:
        (Power spectral analysis of motion at gastric frequencies)
     2. Partial correlation (gastric-brain after controlling for motion)
 
-Based on the analysis plan in GASTRIC_MOTION_VARIANCE_MEDIATION_ANALYSIS.txt
-and building on egg_confounds_synchrony_v5.py data structures.
-
 Usage:
     conda activate brain_gut
     python confound_regression_analysis.py
@@ -399,7 +396,7 @@ def plot_confound_results(freq_overlap_df, partial_corr_df, summary_df, output_p
     ax5 = axes[1, 1]
     ax5.axis('off')
     interpretation_text = """
-    INTERPRETATION GUIDE
+    INTERPRETATION GUIDE (Tentative)
     ====================
 
     Frequency Overlap (Plot A):
@@ -581,3 +578,4 @@ def run_confound_analysis():
 
 if __name__ == "__main__":
     run_confound_analysis()
+
