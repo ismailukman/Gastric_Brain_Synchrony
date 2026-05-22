@@ -13,7 +13,6 @@ Outputs
     outputs/pvaf_group_level.csv     median, IQR, Wilcoxon p, FDR
     outputs/pvaf_decomposition.csv   band-power fraction and in-band PVAF per axis
     outputs/pvaf_figure.png          summary figure
-    outputs/pvaf_documentation.txt   numeric summary
     outputs/pvaf_session_log.txt     run log
 """
 
@@ -67,7 +66,6 @@ OUTPUT_PER_RUN     = OUTPUT_DIR / "pvaf_per_run.csv"
 OUTPUT_GROUP_LEVEL = OUTPUT_DIR / "pvaf_group_level.csv"
 OUTPUT_DECOMP      = OUTPUT_DIR / "pvaf_decomposition.csv"
 OUTPUT_FIGURE      = OUTPUT_DIR / "pvaf_figure.png"
-OUTPUT_DOC         = OUTPUT_DIR / "pvaf_documentation.txt"
 OUTPUT_LOG         = OUTPUT_DIR / "pvaf_session_log.txt"
 
 # Column labels are kept identical to the existing pipeline. If the AFNI
@@ -516,83 +514,6 @@ def plot_pvaf(group_df, per_run_df, out_path):
 
 
 ##############################################################################
-# Documentation                                                              #
-##############################################################################
-
-
-def write_documentation(group_df, per_run_df, n_runs, n_subjects, out_path):
-    fd_row = group_df.set_index("axis").loc["FD_Power2012"]
-    lines = []
-    lines.append("=" * 78)
-    lines.append("PVAF OF TOTAL HEAD MOTION POWER - summary")
-    lines.append("=" * 78)
-    lines.append("")
-    lines.append(f"N = {n_runs} runs from {n_subjects} subjects")
-    lines.append("")
-    lines.append("Headline (median across 6 motion axes):")
-    motion_med_total = np.median([group_df.set_index("axis").loc[a, "pvaf_total_median_pct"]
-                                  for a in MOTION_COLS])
-    motion_med_rsf   = np.median([group_df.set_index("axis").loc[a, "pvaf_rsfMRI_median_pct"]
-                                  for a in MOTION_COLS])
-    motion_med_gast  = np.median([group_df.set_index("axis").loc[a, "pvaf_gastric_band_median_pct"]
-                                  for a in MOTION_COLS])
-    motion_med_band  = np.median([group_df.set_index("axis").loc[a, "motion_power_in_gastric_band_pct"]
-                                  for a in MOTION_COLS])
-    lines += [
-        f"  PVAF vs total motion power               : {motion_med_total:.3f} %",
-        f"  PVAF vs rsfMRI band (0.01-0.10 Hz) power : {motion_med_rsf:.3f} %",
-        f"  PVAF vs narrow gastric-band power        : {motion_med_gast:.3f} %",
-        f"  Motion power that lives in gastric band  : {motion_med_band:.2f} % of total",
-        "",
-        "Framewise displacement (Power et al. 2012):",
-        f"  PVAF_FD vs total FD power                : {fd_row['pvaf_total_median_pct']:.3f} %",
-        f"  Excess over mismatch-null median         : {fd_row['pvaf_total_excess_median_pct']:+.3f} %",
-        f"  Wilcoxon one-sided p                     : {fd_row['wilcoxon_p_one_sided']:.4f}  "
-        f"(FDR q = {fd_row['wilcoxon_p_fdr']:.4f})",
-        "",
-    ]
-    lines.append("-" * 78)
-    lines.append("Per-axis group-level statistics")
-    lines.append("-" * 78)
-    lines.append(f"{'axis':<14s} {'PVAF_total':>10s} {'PVAF_rsfMRI':>12s} "
-                 f"{'PVAF_gast':>10s} {'band_frac':>10s} {'excess':>8s} "
-                 f"{'p':>8s} {'q_FDR':>8s} {'sig':>5s}")
-    for a in list(MOTION_COLS) + ["FD_Power2012"]:
-        r = group_df.set_index("axis").loc[a]
-        lines.append(f"{a:<14s} {r['pvaf_total_median_pct']:>10.3f} "
-                     f"{r['pvaf_rsfMRI_median_pct']:>12.3f} "
-                     f"{r['pvaf_gastric_band_median_pct']:>10.3f} "
-                     f"{r['motion_power_in_gastric_band_pct']:>10.3f} "
-                     f"{r['pvaf_total_excess_median_pct']:>+8.3f} "
-                     f"{r['wilcoxon_p_one_sided']:>8.4f} "
-                     f"{r['wilcoxon_p_fdr']:>8.4f} "
-                     f"{'*' if r['sig_fdr'] else '':>5s}")
-    lines.append("")
-    lines.append("-" * 78)
-    lines.append("Interpretation")
-    lines.append("-" * 78)
-    lines.append(
-        "The OHBM 2025 abstract reports MWU effect sizes computed on PLV/awPLV\n"
-        "distributions where BOTH signals had been bandpassed at the subject's\n"
-        "gastric peak +- 0.015 Hz. Those effect sizes are necessarily 'very small'\n"
-        "because PLV/awPLV is a phase-consistency statistic normalised within the\n"
-        "narrow band.\n\n"
-        "This analysis asks the orthogonal question: of the TOTAL temporal power\n"
-        "of each head-motion parameter (computed on the raw 6 dof time courses or\n"
-        "on signals bandpassed at the rsfMRI-conventional 0.01-0.10 Hz), what\n"
-        "fraction can be linearly accounted for by the gastric rhythm? The three\n"
-        "PVAF columns share the same numerator (variance explained by the cos\n"
-        "phi / sin phi / amplitude regressors derived from the bandpassed EGG)\n"
-        "and differ only in the denominator.\n\n"
-        "The identity PVAF_total = PVAF_band * (band_power / total_power) is\n"
-        "verified in panel E of the figure. The reason PVAF_total is small is\n"
-        "almost entirely because the gastric band occupies a small fraction of\n"
-        "total motion power, NOT because in-band coupling is weak."
-    )
-    out_path.write_text("\n".join(lines))
-
-
-##############################################################################
 # Main                                                                       #
 ##############################################################################
 
@@ -635,11 +556,9 @@ def main():
     log_print(f"  wrote {OUTPUT_GROUP_LEVEL}")
     log_print(f"  wrote {OUTPUT_DECOMP}")
 
-    log_print("[4/4] figures + documentation...")
+    log_print("[4/4] figures...")
     plot_pvaf(group_df, per_run_df, OUTPUT_FIGURE)
     log_print(f"  wrote {OUTPUT_FIGURE}")
-    write_documentation(group_df, per_run_df, n_runs, n_subjects, OUTPUT_DOC)
-    log_print(f"  wrote {OUTPUT_DOC}")
 
     log_print("done.")
     OUTPUT_LOG.write_text("\n".join(log))
