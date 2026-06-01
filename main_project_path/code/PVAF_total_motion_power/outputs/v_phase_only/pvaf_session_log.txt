@@ -1,0 +1,23 @@
+PVAF analysis started at 2026-06-01T16:11:59
+clean_level=strict  fs_fmri=0.5 Hz  EGG fs=10 Hz
+rsfMRI band: (0.01, 0.1)  gastric +-0.015 Hz
+[1/4] loading data...
+  loaded 84 runs from 43 subjects
+[2/4] per-run PVAF computation...
+  LA run 1  (1/84)
+  SE run 1  (11/84)
+  OzO run 1  (21/84)
+  ElL run 2  (31/84)
+  NiC run 2  (41/84)
+  AmK run 2  (51/84)
+  AnF run 1  (61/84)
+  AzN run 2  (71/84)
+  NeI run 1  (81/84)
+  wrote /Users/ismaila/Documents/D-Data/GastricfMRI_g5_g6/Gastric_Brain_Synchrony_Levakov/main_project_path/code/PVAF_total_motion_power/outputs/v_phase_only/pvaf_per_run.csv
+[3/4] group-level statistics + decomposition table...
+  wrote /Users/ismaila/Documents/D-Data/GastricfMRI_g5_g6/Gastric_Brain_Synchrony_Levakov/main_project_path/code/PVAF_total_motion_power/outputs/v_phase_only/pvaf_group_level.csv
+  wrote /Users/ismaila/Documents/D-Data/GastricfMRI_g5_g6/Gastric_Brain_Synchrony_Levakov/main_project_path/code/PVAF_total_motion_power/outputs/v_phase_only/pvaf_decomposition.csv
+[4/4] figures + documentation...
+  wrote /Users/ismaila/Documents/D-Data/GastricfMRI_g5_g6/Gastric_Brain_Synchrony_Levakov/main_project_path/code/PVAF_total_motion_power/outputs/v_phase_only/pvaf_figure.png
+  wrote /Users/ismaila/Documents/D-Data/GastricfMRI_g5_g6/Gastric_Brain_Synchrony_Levakov/main_project_path/code/PVAF_total_motion_power/outputs/v_phase_only/pvaf_documentation.txt
+done.

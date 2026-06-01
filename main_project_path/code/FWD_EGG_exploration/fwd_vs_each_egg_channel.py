@@ -1,11 +1,31 @@
 #!/usr/bin/env python3
 """
-FWD vs each EGG channel - exploratory test.
+FWD vs each EGG channel - exploratory test
+==========================================
 
-Usage
------
-    conda activate brain_gut
-    python fwd_vs_each_egg_channel.py
+Companion script to the PVAF analysis. The OHBM 2025 pipeline collapses the
+multi-electrode EGG to a single 'dominant channel' early in preprocessing
+and never re-visits the other channels. This script asks two simple
+sanity-check questions that are useful for the journal manuscript:
+
+    Q1: How does framewise displacement (FD, Power et al. 2012) line up
+        in time with each individual EGG channel for a few example runs?
+
+    Q2: Across all runs, how does the FD~gastric coupling computed from
+        the dominant channel compare with the coupling computed from
+        every other electrode (correlation, coherence, phase-locking)?
+
+It is intentionally exploratory rather than confirmatory: the goal is to
+verify the FD computation, confirm the dominant-channel choice was
+reasonable, and produce diagnostic plots that can be included in a
+supplement.
+
+FWD definition (Power et al. 2012, eq. 2)
+-----------------------------------------
+    FD(t) = |dx(t)| + |dy(t)| + |dz(t)|
+          + r * (|d_pitch(t)| + |d_roll(t)| + |d_yaw(t)|)
+with displacements in mm, rotations in RADIANS, and r = 50 mm (typical
+sphere radius). AFNI 3dvolreg writes rotations in degrees, so we convert.
 
 Outputs
 -------
@@ -14,6 +34,11 @@ Outputs
     outputs/fwd_channel_comparison.png          per-channel coupling boxplots
     outputs/fwd_dominant_vs_all.png             dominant vs other electrodes
     outputs/fwd_log.txt                         run log + FD sanity values
+
+Usage
+-----
+    conda activate brain_gut
+    python fwd_vs_each_egg_channel.py
 """
 
 import os
@@ -27,7 +52,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import signal as sp_signal
 from scipy.signal import resample, coherence, hilbert
-from scipy.stats import pearsonr
+from scipy.stats import pearsonr, spearmanr
 import bioread
 from mne.filter import filter_data
 
@@ -216,7 +241,8 @@ def analyse_run(sub, run, record_meta_row):
     dom_idx = int(np.nanargmax(bp_powers)) if any(np.isfinite(bp_powers)) else -1
 
     rows = []
-    fwd_at_fmri = None  # computed once per run
+    fwd_at_fmri = None    # raw FD time course, computed once per run
+    fwd_bp = None         # FD bandpassed at the gastric peak +/- 0.015 Hz
     overlay_payload = {"sub": sub, "run": run, "gastric_peak": gastric_peak,
                        "fd": None, "channels_bp_fmri": [], "time_s": None}
 
@@ -225,24 +251,44 @@ def analyse_run(sub, run, record_meta_row):
             egg_at_fmri, mdf = align_to_fmri(ch, motion_df)
             if fwd_at_fmri is None:
                 fwd_at_fmri = fd_power_2012(mdf)
+                # Bandpass FD at the same gastric band the EGG was filtered
+                # at, so the PLV / Pearson comparisons are between two
+                # narrowband signals (Issue 1 + Issue 2 of the review).
+                fwd_bp = bp_filter_1d(fwd_at_fmri, SAMPLE_RATE_FMRI,
+                                      band[0], band[1])
                 overlay_payload["fd"] = fwd_at_fmri
-                overlay_payload["time_s"] = np.arange(len(fwd_at_fmri)) / SAMPLE_RATE_FMRI
+                overlay_payload["time_s"] = (
+                    np.arange(len(fwd_at_fmri)) / SAMPLE_RATE_FMRI
+                )
 
             ch_bp = bp_filter_1d(egg_at_fmri, SAMPLE_RATE_FMRI, band[0], band[1])
             overlay_payload["channels_bp_fmri"].append(ch_bp)
 
-            n = min(len(ch_bp), len(fwd_at_fmri))
-            fd_n = fwd_at_fmri[:n]
-            ch_n = ch_bp[:n]
-            if n < 30 or np.std(fd_n) < 1e-12 or np.std(ch_n) < 1e-12:
+            n = min(len(ch_bp), len(fwd_bp))
+            fd_n     = fwd_at_fmri[:n]   # raw FD (mm)
+            fd_bp_n  = fwd_bp[:n]        # bandpassed FD (mm in the gastric band)
+            ch_n     = ch_bp[:n]         # bandpassed EGG channel
+            if (n < 30 or np.std(fd_bp_n) < 1e-12 or np.std(ch_n) < 1e-12):
                 rows.append({"subject": sub, "run": int(run),
                              "channel": ch_idx,
-                             "is_dominant": False, "error": "too short or flat"})
+                             "is_dominant": False,
+                             "error": "too short or flat"})
                 continue
 
-            r_val, p_val = pearsonr(fd_n, ch_n)
-            plv = plv_two_signals(fd_n, ch_n)
-            coh_mean, coh_peak = coherence_in_band(fd_n, ch_n, SAMPLE_RATE_FMRI, band)
+            # PHASE-LOCKING COUPLING (narrowband vs narrowband, Issue 1)
+            r_bp,  p_bp  = pearsonr(fd_bp_n, ch_n)
+            plv = plv_two_signals(fd_bp_n, ch_n)
+            coh_mean, coh_peak = coherence_in_band(
+                fd_bp_n, ch_n, SAMPLE_RATE_FMRI, band
+            )
+
+            # AMPLITUDE COUPLING (raw FD vs EGG envelope, Issue 2 option b).
+            # Both signals are slow and non-negative, so the Pearson /
+            # Spearman correlation between them is interpretable as
+            # "do bigger gastric oscillations come with more head motion".
+            egg_envelope = np.abs(hilbert(ch_n))
+            r_env_p, _   = pearsonr(fd_n, egg_envelope)
+            r_env_s, _   = spearmanr(fd_n, egg_envelope)
 
             rows.append({
                 "subject": sub, "run": int(run), "channel": ch_idx,
@@ -252,11 +298,15 @@ def analyse_run(sub, run, record_meta_row):
                 "fd_mean_mm": float(np.mean(fd_n)),
                 "fd_max_mm":  float(np.max(fd_n)),
                 "egg_band_rms": float(np.std(ch_n)),
-                "pearson_r_fd_vs_egg":  r_val,
-                "pearson_p_fd_vs_egg":  p_val,
-                "plv_fd_vs_egg": plv,
-                "coh_band_mean": coh_mean,
-                "coh_band_peak": coh_peak,
+                # Phase-locked coupling (bandpassed FD vs bandpassed EGG):
+                "pearson_r_fd_vs_egg":  r_bp,
+                "pearson_p_fd_vs_egg":  p_bp,
+                "plv_fd_vs_egg":        plv,
+                "coh_band_mean":        coh_mean,
+                "coh_band_peak":        coh_peak,
+                # Amplitude coupling (raw FD vs EGG envelope):
+                "pearson_r_fd_vs_egg_envelope":  r_env_p,
+                "spearman_r_fd_vs_egg_envelope": r_env_s,
                 "error": "",
             })
         except Exception as exc:

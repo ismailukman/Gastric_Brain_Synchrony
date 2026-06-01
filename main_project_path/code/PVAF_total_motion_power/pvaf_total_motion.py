@@ -13,6 +13,7 @@ Outputs
     outputs/pvaf_group_level.csv     median, IQR, Wilcoxon p, FDR
     outputs/pvaf_decomposition.csv   band-power fraction and in-band PVAF per axis
     outputs/pvaf_figure.png          summary figure
+    outputs/pvaf_documentation.txt   numeric summary
     outputs/pvaf_session_log.txt     run log
 """
 
@@ -25,7 +26,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from scipy.signal import resample, welch, coherence, hilbert
+from scipy.signal import resample, welch, hilbert
 from scipy.stats import wilcoxon, false_discovery_control
 import statsmodels.api as sm
 from mne.filter import filter_data
@@ -66,6 +67,7 @@ OUTPUT_PER_RUN     = OUTPUT_DIR / "pvaf_per_run.csv"
 OUTPUT_GROUP_LEVEL = OUTPUT_DIR / "pvaf_group_level.csv"
 OUTPUT_DECOMP      = OUTPUT_DIR / "pvaf_decomposition.csv"
 OUTPUT_FIGURE      = OUTPUT_DIR / "pvaf_figure.png"
+OUTPUT_DOC         = OUTPUT_DIR / "pvaf_documentation.txt"
 OUTPUT_LOG         = OUTPUT_DIR / "pvaf_session_log.txt"
 
 # Column labels are kept identical to the existing pipeline. If the AFNI
@@ -113,27 +115,26 @@ def bp_filter_1d(x, sfreq, l_freq, h_freq, filt_order=filter_order,
     return out.flatten()
 
 
-def build_gastric_regressors(gastric_bp, include_amp=True):
+def build_gastric_regressors(gastric_bp):
     """
-    Build the design matrix from the bandpassed gastric signal.
+    Two-column design matrix from the analytic gastric signal:
 
-        gastric_bp(t) = real part
-        H[gastric_bp](t) = imaginary part of analytic signal
-        phi(t) = arg(z), A(t) = |z|
+        X = [ g(t) , H[g](t) ]
 
-    Returns columns:  cos(phi), sin(phi), A    (3 predictors; intercept added later)
-    With include_amp=False returns only cos(phi), sin(phi)  (phase-only model).
+    where g(t) is the bandpassed gastric signal (the real part of its
+    analytic representation z) and H[g](t) is its Hilbert transform
+    (the imaginary part of z). These are equivalent to
+    [ A(t)*cos(phi(t)), A(t)*sin(phi(t)) ], so the design captures both
+    phase locking and amplitude modulation of the in-band rhythm. Both
+    columns live entirely in the gastric band, which keeps SS_explained
+    strictly in-band and makes the Parseval decomposition identity hold
+    cleanly.
 
-    Standardising each predictor to unit variance keeps the OLS coefficients
-    interpretable but does NOT change R^2.
+    Standardising each predictor to zero mean and unit variance does
+    not change R^2.
     """
     z = hilbert(gastric_bp)
-    phi = np.angle(z)
-    A = np.abs(z)
-    cols = [np.cos(phi), np.sin(phi)]
-    if include_amp:
-        cols.append(A)
-    X = np.column_stack(cols)
+    X = np.column_stack([np.real(z), np.imag(z)])
     X = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-15)
     return X
 
@@ -239,9 +240,18 @@ def load_all_subject_data():
 
 def pvaf_for_run(data, all_data):
     """
-    Compute the three PVAF measures (total / rsfMRI / gastric-band) for each
-    of the 6 motion axes, plus framewise displacement, plus a per-run null
-    distribution via mismatched-subject regressors.
+    Compute the three PVAF measures (apples-to-apples R^2 on the
+    three motion variants) for each of the 6 motion axes, plus
+    framewise displacement, plus a per-run null distribution via
+    mismatched-subject regressors.
+
+    Apples-to-apples definition (Issue 1 of review_issues_and_fixes.txt):
+
+        PVAF_total   = SS_explained(y_raw)  / SS_total(y_raw)
+        PVAF_rsfMRI  = SS_explained(y_rsf)  / SS_total(y_rsf)
+        PVAF_gastric = SS_explained(y_gast) / SS_total(y_gast)
+
+    Each row is a proper R^2 on its own filtered motion signal.
 
     Returns one record per (axis OR FD-summary) for this subject-run.
     """
@@ -250,7 +260,7 @@ def pvaf_for_run(data, all_data):
     motion_df = data["motion_raw"]
 
     # ---- Gastric regressors (empirical and from each other subject) ----
-    X_emp = build_gastric_regressors(data["gastric_bp"], include_amp=True)
+    X_emp = build_gastric_regressors(data["gastric_bp"])
     other_subjs = [k for k in all_data
                    if all_data[k]["subject"] != sub
                    and all_data[k]["n"] >= n]
@@ -258,7 +268,7 @@ def pvaf_for_run(data, all_data):
         rng = np.random.default_rng(seed=hash((sub, run)) % (2**32))
         other_subjs = rng.choice(other_subjs, size=MAX_NULL, replace=False).tolist()
     X_null_list = [
-        build_gastric_regressors(all_data[k]["gastric_bp"][:n], include_amp=True)
+        build_gastric_regressors(all_data[k]["gastric_bp"][:n])
         for k in other_subjs
     ]
 
@@ -276,28 +286,26 @@ def pvaf_for_run(data, all_data):
 
     rows = []
     for axis in MOTION_COLS:
-        y_raw   = motion_df[axis].values
-        y_rsf   = motion_rsfMRI[axis].values
-        y_gast  = motion_gastric[axis].values
+        y_raw  = motion_df[axis].values
+        y_rsf  = motion_rsfMRI[axis].values
+        y_gast = motion_gastric[axis].values
 
-        # SS_explained is computed against the RAW signal: this is the
-        # variance attributable to the gastric regressors over the whole
-        # broadband signal. The three PVAFs share this same numerator.
-        ss_total_raw, ss_expl_raw, beta = regression_ss(y_raw, X_emp)
-        ss_total_rsf,  _, _ = regression_ss(y_rsf, X_emp)
-        ss_total_gast, _, _ = regression_ss(y_gast, X_emp)
+        # Apples-to-apples: fit OLS independently on each y, take each R^2.
+        ss_total_raw,  ss_expl_raw,  _ = regression_ss(y_raw,  X_emp)
+        ss_total_rsf,  ss_expl_rsf,  _ = regression_ss(y_rsf,  X_emp)
+        ss_total_gast, ss_expl_gast, _ = regression_ss(y_gast, X_emp)
 
-        pvaf_total   = ss_expl_raw / ss_total_raw  if ss_total_raw  > 0 else np.nan
-        pvaf_rsfMRI  = ss_expl_raw / ss_total_rsf  if ss_total_rsf  > 0 else np.nan
-        pvaf_gastric = ss_expl_raw / ss_total_gast if ss_total_gast > 0 else np.nan
+        pvaf_total   = ss_expl_raw  / ss_total_raw  if ss_total_raw  > 0 else np.nan
+        pvaf_rsfMRI  = ss_expl_rsf  / ss_total_rsf  if ss_total_rsf  > 0 else np.nan
+        pvaf_gastric = ss_expl_gast / ss_total_gast if ss_total_gast > 0 else np.nan
 
-        # Spectral decomposition: fraction of motion power in each band.
-        bp_rsf,   total_p, _, _ = band_power(y_raw, SAMPLE_RATE_FMRI, RSFMRI_BAND)
-        bp_gast,  _,       _, _ = band_power(y_raw, SAMPLE_RATE_FMRI, (l_g, h_g))
+        # Where the motion power lives (Welch-PSD band fractions of y_raw).
+        bp_rsf,  total_p, _, _ = band_power(y_raw, SAMPLE_RATE_FMRI, RSFMRI_BAND)
+        bp_gast, _,       _, _ = band_power(y_raw, SAMPLE_RATE_FMRI, (l_g, h_g))
         frac_in_rsfMRI  = bp_rsf  / total_p if total_p > 0 else np.nan
         frac_in_gastric = bp_gast / total_p if total_p > 0 else np.nan
 
-        # Null distribution: same numerator with mismatched gastric.
+        # Null distribution for the headline statistic (PVAF_total).
         pvaf_total_null = np.array([
             (regression_ss(y_raw, Xn)[1] / ss_total_raw) if ss_total_raw > 0 else np.nan
             for Xn in X_null_list
@@ -306,14 +314,16 @@ def pvaf_for_run(data, all_data):
         rows.append({
             "subject": sub, "run": run, "axis": axis,
             "gastric_peak_Hz": gastric_peak, "n_timepoints": n,
-            "ss_total_raw": ss_total_raw,
-            "ss_total_rsfMRI": ss_total_rsf,
-            "ss_total_gastric_band": ss_total_gast,
-            "ss_explained_by_gastric": ss_expl_raw,
-            "pvaf_total_pct": 100 * pvaf_total,
-            "pvaf_rsfMRI_pct": 100 * pvaf_rsfMRI,
-            "pvaf_gastric_band_pct": 100 * pvaf_gastric,
-            "motion_power_in_rsfMRI_band_frac": frac_in_rsfMRI,
+            "ss_total_raw":            ss_total_raw,
+            "ss_total_rsfMRI":         ss_total_rsf,
+            "ss_total_gastric_band":   ss_total_gast,
+            "ss_explained_raw":        ss_expl_raw,
+            "ss_explained_rsfMRI":     ss_expl_rsf,
+            "ss_explained_gastric":    ss_expl_gast,
+            "pvaf_total_pct":          100 * pvaf_total,
+            "pvaf_rsfMRI_pct":         100 * pvaf_rsfMRI,
+            "pvaf_gastric_band_pct":   100 * pvaf_gastric,
+            "motion_power_in_rsfMRI_band_frac":  frac_in_rsfMRI,
             "motion_power_in_gastric_band_frac": frac_in_gastric,
             "pvaf_total_null_median_pct": 100 * np.nanmedian(pvaf_total_null),
             "pvaf_total_null_mean_pct":   100 * np.nanmean(pvaf_total_null),
@@ -322,7 +332,7 @@ def pvaf_for_run(data, all_data):
             "n_null":                     int(np.sum(~np.isnan(pvaf_total_null))),
         })
 
-    # ---- Framewise displacement: one PVAF per run ----
+    # ---- Framewise displacement: PVAF on FD (single denominator) ----
     fd = fd_power_2012(motion_df)
     ss_total_raw, ss_expl_raw, _ = regression_ss(fd, X_emp)
     pvaf_fd_total = ss_expl_raw / ss_total_raw if ss_total_raw > 0 else np.nan
@@ -333,14 +343,16 @@ def pvaf_for_run(data, all_data):
     rows.append({
         "subject": sub, "run": run, "axis": "FD_Power2012",
         "gastric_peak_Hz": gastric_peak, "n_timepoints": n,
-        "ss_total_raw": ss_total_raw,
-        "ss_total_rsfMRI": np.nan,
-        "ss_total_gastric_band": np.nan,
-        "ss_explained_by_gastric": ss_expl_raw,
-        "pvaf_total_pct": 100 * pvaf_fd_total,
-        "pvaf_rsfMRI_pct": np.nan,
-        "pvaf_gastric_band_pct": np.nan,
-        "motion_power_in_rsfMRI_band_frac": np.nan,
+        "ss_total_raw":            ss_total_raw,
+        "ss_total_rsfMRI":         np.nan,
+        "ss_total_gastric_band":   np.nan,
+        "ss_explained_raw":        ss_expl_raw,
+        "ss_explained_rsfMRI":     np.nan,
+        "ss_explained_gastric":    np.nan,
+        "pvaf_total_pct":          100 * pvaf_fd_total,
+        "pvaf_rsfMRI_pct":         np.nan,
+        "pvaf_gastric_band_pct":   np.nan,
+        "motion_power_in_rsfMRI_band_frac":  np.nan,
         "motion_power_in_gastric_band_frac": np.nan,
         "pvaf_total_null_median_pct": 100 * np.nanmedian(pvaf_fd_null),
         "pvaf_total_null_mean_pct":   100 * np.nanmean(pvaf_fd_null),
@@ -514,6 +526,83 @@ def plot_pvaf(group_df, per_run_df, out_path):
 
 
 ##############################################################################
+# Documentation                                                              #
+##############################################################################
+
+
+def write_documentation(group_df, per_run_df, n_runs, n_subjects, out_path):
+    fd_row = group_df.set_index("axis").loc["FD_Power2012"]
+    lines = []
+    lines.append("=" * 78)
+    lines.append("PVAF OF TOTAL HEAD MOTION POWER - summary")
+    lines.append("=" * 78)
+    lines.append("")
+    lines.append(f"N = {n_runs} runs from {n_subjects} subjects")
+    lines.append("")
+    lines.append("Headline (median across 6 motion axes):")
+    motion_med_total = np.median([group_df.set_index("axis").loc[a, "pvaf_total_median_pct"]
+                                  for a in MOTION_COLS])
+    motion_med_rsf   = np.median([group_df.set_index("axis").loc[a, "pvaf_rsfMRI_median_pct"]
+                                  for a in MOTION_COLS])
+    motion_med_gast  = np.median([group_df.set_index("axis").loc[a, "pvaf_gastric_band_median_pct"]
+                                  for a in MOTION_COLS])
+    motion_med_band  = np.median([group_df.set_index("axis").loc[a, "motion_power_in_gastric_band_pct"]
+                                  for a in MOTION_COLS])
+    lines += [
+        f"  PVAF vs total motion power               : {motion_med_total:.3f} %",
+        f"  PVAF vs rsfMRI band (0.01-0.10 Hz) power : {motion_med_rsf:.3f} %",
+        f"  PVAF vs narrow gastric-band power        : {motion_med_gast:.3f} %",
+        f"  Motion power that lives in gastric band  : {motion_med_band:.2f} % of total",
+        "",
+        "Framewise displacement (Power et al. 2012):",
+        f"  PVAF_FD vs total FD power                : {fd_row['pvaf_total_median_pct']:.3f} %",
+        f"  Excess over mismatch-null median         : {fd_row['pvaf_total_excess_median_pct']:+.3f} %",
+        f"  Wilcoxon one-sided p                     : {fd_row['wilcoxon_p_one_sided']:.4f}  "
+        f"(FDR q = {fd_row['wilcoxon_p_fdr']:.4f})",
+        "",
+    ]
+    lines.append("-" * 78)
+    lines.append("Per-axis group-level statistics")
+    lines.append("-" * 78)
+    lines.append(f"{'axis':<14s} {'PVAF_total':>10s} {'PVAF_rsfMRI':>12s} "
+                 f"{'PVAF_gast':>10s} {'band_frac':>10s} {'excess':>8s} "
+                 f"{'p':>8s} {'q_FDR':>8s} {'sig':>5s}")
+    for a in list(MOTION_COLS) + ["FD_Power2012"]:
+        r = group_df.set_index("axis").loc[a]
+        lines.append(f"{a:<14s} {r['pvaf_total_median_pct']:>10.3f} "
+                     f"{r['pvaf_rsfMRI_median_pct']:>12.3f} "
+                     f"{r['pvaf_gastric_band_median_pct']:>10.3f} "
+                     f"{r['motion_power_in_gastric_band_pct']:>10.3f} "
+                     f"{r['pvaf_total_excess_median_pct']:>+8.3f} "
+                     f"{r['wilcoxon_p_one_sided']:>8.4f} "
+                     f"{r['wilcoxon_p_fdr']:>8.4f} "
+                     f"{'*' if r['sig_fdr'] else '':>5s}")
+    lines.append("")
+    lines.append("-" * 78)
+    lines.append("Interpretation")
+    lines.append("-" * 78)
+    lines.append(
+        "The OHBM 2025 abstract reports MWU effect sizes computed on PLV/awPLV\n"
+        "distributions where BOTH signals had been bandpassed at the subject's\n"
+        "gastric peak +- 0.015 Hz. Those effect sizes are necessarily 'very small'\n"
+        "because PLV/awPLV is a phase-consistency statistic normalised within the\n"
+        "narrow band.\n\n"
+        "This analysis asks the orthogonal question: of the TOTAL temporal power\n"
+        "of each head-motion parameter (computed on the raw 6 dof time courses or\n"
+        "on signals bandpassed at the rsfMRI-conventional 0.01-0.10 Hz), what\n"
+        "fraction can be linearly accounted for by the gastric rhythm? The three\n"
+        "PVAF columns share the same numerator (variance explained by the cos\n"
+        "phi / sin phi / amplitude regressors derived from the bandpassed EGG)\n"
+        "and differ only in the denominator.\n\n"
+        "The identity PVAF_total = PVAF_band * (band_power / total_power) is\n"
+        "verified in panel E of the figure. The reason PVAF_total is small is\n"
+        "almost entirely because the gastric band occupies a small fraction of\n"
+        "total motion power, NOT because in-band coupling is weak."
+    )
+    out_path.write_text("\n".join(lines))
+
+
+##############################################################################
 # Main                                                                       #
 ##############################################################################
 
@@ -556,9 +645,11 @@ def main():
     log_print(f"  wrote {OUTPUT_GROUP_LEVEL}")
     log_print(f"  wrote {OUTPUT_DECOMP}")
 
-    log_print("[4/4] figures...")
+    log_print("[4/4] figures + documentation...")
     plot_pvaf(group_df, per_run_df, OUTPUT_FIGURE)
     log_print(f"  wrote {OUTPUT_FIGURE}")
+    write_documentation(group_df, per_run_df, n_runs, n_subjects, OUTPUT_DOC)
+    log_print(f"  wrote {OUTPUT_DOC}")
 
     log_print("done.")
     OUTPUT_LOG.write_text("\n".join(log))

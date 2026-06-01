@@ -1,4 +1,4 @@
-FWD-vs-EGG exploration started 2026-05-21T17:42:13
+FWD-vs-EGG exploration started 2026-06-01T13:33:36
   84 runs in metadata
   wrote /Users/ismaila/Documents/D-Data/GastricfMRI_g5_g6/Gastric_Brain_Synchrony_Levakov/main_project_path/code/FWD_EGG_exploration/outputs/fwd_per_channel_results.csv  (327 rows)
   FD mean across runs: median=0.1038 mm (IQR 0.0850 - 0.1307)
